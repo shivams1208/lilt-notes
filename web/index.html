@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: file:; font-src 'self'; connect-src 'none'">
+<title>Lilt Notes</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><span id="note-title">Lilt Notes</span><div class="toolbar"><button data-action="actions" title="Actions · ⌘K" aria-label="Actions"><i data-lucide="command"></i></button><button data-action="browse" title="Browse Notes · ⌘P" aria-label="Browse Notes"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="4" width="8" height="10" rx="1.5" transform="rotate(-12 7 9)"/><rect x="6" y="2" width="8" height="11" rx="1.5" transform="rotate(9 10 7)"/></svg></button><button data-action="new" title="New Note · ⌘N" aria-label="New Note"><i data-lucide="plus"></i></button></div></header>
+<div id="findbar" role="search" aria-label="Find and replace" hidden></div>
+<main id="writing"><div id="editor"></div><textarea id="source" spellcheck="false" aria-label="Markdown source" hidden></textarea></main>
+<div id="formatbar" hidden></div>
+<footer><button data-action="stats" id="stats">0 characters</button><span id="save-state" role="status"></span><span class="footer-spacer"></span><button data-action="formatbar" id="format-toggle" title="Toggle Format Bar" aria-label="Toggle Format Bar"><span class="aa">Aa</span><i data-lucide="x" class="format-close"></i></button></footer>
+<div id="overlay" hidden></div><div id="toast" role="status" hidden></div>
+<script src="bundle.js"></script></body></html>
