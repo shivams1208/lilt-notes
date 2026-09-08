@@ -10,7 +10,25 @@ Lilt Notes is a native AppKit app with a bundled rich-text editor. It works offl
 - Automatic local saving, optional iCloud Drive folder sync, and portable exports.
 - Optional on-device writing assistance through Apple Intelligence.
 
-[Install](#install) · [Build from source](#build-from-source) · [Shortcuts](#use-the-app) · [Your data](#notes-and-data) · [Troubleshooting](#troubleshooting) · [Development](#development)
+[Screenshots](#screenshots) · [Install](#install) · [Build from source](#build-from-source) · [Shortcuts](#use-the-app) · [Your data](#notes-and-data) · [Troubleshooting](#troubleshooting) · [Development](#development)
+
+## Screenshots
+
+### Empty note
+
+A clean floating note, ready to write in.
+
+<img src="docs/screenshots/empty-note.png" alt="An empty Lilt Notes window with its native close button and compact toolbar" width="480">
+
+### Command windows
+
+Open actions with **⌘K**, or browse and search notes with **⌘P**.
+
+| Actions · ⌘K | Browse notes · ⌘P |
+|---|---|
+| <img src="docs/screenshots/command-palette.png" alt="The compact Lilt Notes actions palette with command names and keyboard shortcuts" width="360"> | <img src="docs/screenshots/note-browser.png" alt="The Lilt Notes browser showing pinned and recent example notes" width="360"> |
+
+Screenshots use an empty draft and example notes in a separate demo library. Appearance follows your chosen theme and macOS version.
 
 ## Install
 
@@ -137,8 +155,8 @@ Clone this repository, then run these commands from its root:
 git clone https://github.com/shivams1208/lilt-notes.git
 cd lilt-notes
 npm ci
-zsh Scripts/build.sh
-zsh Scripts/test.sh
+zsh scripts/build.sh
+zsh scripts/test.sh
 open "dist/Lilt Notes.app"
 ```
 
@@ -164,25 +182,26 @@ To install your own build, quit Lilt and copy `dist/Lilt Notes.app` to Applicati
 
 | Path | Purpose |
 |---|---|
-| `Sources/main.swift` | AppKit panel, WebKit bridge, menu bar, shortcuts, persistence orchestration |
-| `Sources/Vault.swift` | Validated local JSON storage, atomic writes, previous-save recovery |
-| `Sources/FolderSync.swift` | Portable Markdown files and per-note metadata exchange |
-| `Sources/WritingAssistant.swift` | Optional on-device writing assistance |
-| `Sources/Shortcuts.swift` | Shortcut validation and routing |
-| `Sources/NativeAppearance.swift` | Guarded system-material integration and fallback |
+| `sources/main.swift` | AppKit panel, WebKit bridge, menu bar, shortcuts, persistence orchestration |
+| `sources/Vault.swift` | Validated local JSON storage, atomic writes, previous-save recovery |
+| `sources/FolderSync.swift` | Portable Markdown files and per-note metadata exchange |
+| `sources/WritingAssistant.swift` | Optional on-device writing assistance |
+| `sources/Shortcuts.swift` | Shortcut validation and routing |
+| `sources/NativeAppearance.swift` | Guarded system-material integration and fallback |
 | `web/` | Tiptap editor, command palette, note model, styling, snippets, and search |
-| `Tests/` | Editor/application tests and native storage/shortcut/writing checks |
-| `Scripts/` | Build, test, release packaging, and icon generation |
-| `Resources/` | Original app icon and source icon sizes |
+| `tests/` | Editor/application tests and native storage/shortcut/writing checks |
+| `scripts/` | Build, test, release packaging, and icon generation |
+| `resources/` | Original app icon and source icon sizes |
+| `docs/screenshots/` | App screenshots used in this README |
 
 The UI is bundled locally inside a WKWebView. Native operations pass through a small message bridge. The content security policy blocks network requests from the editor; external links open through macOS. Runtime notes are never stored in this repository.
 
-`Sources/NativeAppearance.swift` uses a guarded, **nonpublic WebKit appearance preference** to enable system materials on supported versions. A CSS fallback remains available; launch with `--no-glass` to disable that integration. This distribution is not prepared for App Store submission, and future WebKit changes may require an appearance update.
+`sources/NativeAppearance.swift` uses a guarded, **nonpublic WebKit appearance preference** to enable system materials on supported versions. A CSS fallback remains available; launch with `--no-glass` to disable that integration. This distribution is not prepared for App Store submission, and future WebKit changes may require an appearance update.
 
 ### Tests
 
 ```sh
-zsh Scripts/test.sh
+zsh scripts/test.sh
 ```
 
 This rebuilds the browser bundle, runs the JavaScript tests, and compiles/runs the Swift storage, folder-sync, shortcut, and writing-helper tests. It uses synthetic notes and temporary folders. Optional real-model verification, on a Mac with Apple Intelligence ready:
@@ -215,7 +234,7 @@ The audit creates synthetic notes, exercises three window sizes and both auto-si
 From a Git checkout with committed source:
 
 ```sh
-zsh Scripts/release.sh
+zsh scripts/release.sh
 ```
 
 The script builds and tests the app, packages the app and tracked source into `release/`, and writes SHA-256 checksums. Only Git-tracked source is included in the source archive; build caches, personal libraries, and exports are excluded. Upload the two ZIPs and `SHA256SUMS.txt` to a GitHub release for the corresponding version tag. Distribute only a build you have tested. The script does not notarize the app or publish anything automatically.
