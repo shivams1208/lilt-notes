@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+release/
+.DS_Store
+*.log
+*.bookmark
+session.lock
+library.json
+library.previous.json
+.lilt/
+.env
+.env.*
+!.env.example
