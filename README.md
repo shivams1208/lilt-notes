@@ -14,21 +14,35 @@ Lilt Notes is a native AppKit app with a bundled rich-text editor. It works offl
 
 ## Screenshots
 
+Light and dark appearances, captured from the app with an empty draft and example notes in a separate demo library.
+
 ### Empty note
 
 A clean floating note, ready to write in.
 
-<img src="docs/screenshots/empty-note.png" alt="An empty Lilt Notes window with its native close button and compact toolbar" width="480">
+| Light | Dark |
+|---|---|
+| <img src="docs/screenshots/empty-note-light.png" alt="An empty Lilt Notes window in light mode" width="400"> | <img src="docs/screenshots/empty-note.png?v=2" alt="An empty Lilt Notes window in dark mode" width="400"> |
 
 ### Command windows
 
-Open actions with **⌘K**, or browse and search notes with **⌘P**.
+**Actions · ⌘K**
 
-| Actions · ⌘K | Browse notes · ⌘P |
+Search commands and see their keyboard shortcuts.
+
+| Light | Dark |
 |---|---|
-| <img src="docs/screenshots/command-palette.png" alt="The compact Lilt Notes actions palette with command names and keyboard shortcuts" width="360"> | <img src="docs/screenshots/note-browser.png" alt="The Lilt Notes browser showing pinned and recent example notes" width="360"> |
+| <img src="docs/screenshots/command-palette-light.png" alt="The Lilt Notes actions palette in light mode" width="400"> | <img src="docs/screenshots/command-palette.png?v=2" alt="The Lilt Notes actions palette in dark mode" width="400"> |
 
-Screenshots use an empty draft and example notes in a separate demo library. Appearance follows your chosen theme and macOS version.
+**Browse notes · ⌘P**
+
+Find your pinned and recent notes.
+
+| Light | Dark |
+|---|---|
+| <img src="docs/screenshots/note-browser-light.png" alt="The Lilt Notes browser in light mode, showing pinned and recent example notes" width="400"> | <img src="docs/screenshots/note-browser.png?v=2" alt="The Lilt Notes browser in dark mode, showing pinned and recent example notes" width="400"> |
+
+Choose **Light**, **Dark**, or **System** in **Settings → Appearance**. System follows your Mac’s appearance; materials may vary with macOS version and the background behind the floating window.
 
 ## Install
 
