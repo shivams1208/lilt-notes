@@ -7,6 +7,7 @@ Lilt Notes is a native AppKit app with a bundled rich-text editor. It works offl
 - Floating, resizable window with a native macOS close button.
 - Rich Markdown editing, source mode, tables, code, tasks, images, and emoji.
 - Compact command palette, full-content search, pins, snippets, and shortcuts.
+- Apple Spotlight indexing with edit-date recency and direct opening of notes.
 - Automatic local saving, optional iCloud Drive folder sync, and portable exports.
 - Optional on-device writing assistance through Apple Intelligence.
 
@@ -59,7 +60,7 @@ The release is **arm64 only**. Intel Macs, Windows, Linux, iPhone, and iPad do n
 
 ### Download the app
 
-1. Open the [Releases page](https://github.com/shivams1208/lilt-notes/releases/latest) and download `Lilt-Notes-1.0.0-macOS-arm64.zip`.
+1. Open the [Releases page](https://github.com/shivams1208/lilt-notes/releases/latest) and download `Lilt-Notes-1.1.0-macOS-arm64.zip`.
 2. Unzip it and drag **Lilt Notes.app** into **Applications**.
 3. Open the app. Look for the pencil icon in the menu bar; there is no normal Dock icon.
 4. If prompted for a notes folder, select **iCloud Drive → Lilt Notes**, or choose another folder. You can change this later in Settings.
@@ -70,7 +71,7 @@ The downloadable build is **ad-hoc signed and not notarized**. macOS may require
 A `SHA256SUMS.txt` file accompanies each release. You can compare its app hash with:
 
 ```sh
-shasum -a 256 Lilt-Notes-1.0.0-macOS-arm64.zip
+shasum -a 256 Lilt-Notes-1.1.0-macOS-arm64.zip
 ```
 
 ### Updates and moving to another Mac
@@ -78,6 +79,12 @@ shasum -a 256 Lilt-Notes-1.0.0-macOS-arm64.zip
 Lilt has no automatic updater. Quit it, download a newer release, and replace the app in Applications. Replacing the app does not replace your notes. Export a library backup before updating.
 
 On a new Apple silicon Mac, install Lilt and choose the same iCloud notes folder. Keep the hidden `.lilt` folder along with the Markdown files: it holds identities, pin order, rich formatting, and deletion state. For a complete manual transfer, export **Library Backup** on the old Mac and use **Import Library Backup** on the new one. Re-select the folder and review local preferences and shortcuts on the new Mac.
+
+### macOS 27 Golden Gate
+
+Version 1.1 includes the current Foundation Models error handling and generation API for macOS 27, with the macOS 26 implementation retained for older systems. Native material rendering is enabled only after its runtime capability and calling convention are checked; command panels keep a readable standard background if that capability is unavailable. Asynchronous Quit requests complete their final save through the main run loop, avoiding a shutdown stall while AppKit waits for saving.
+
+Compatibility checks cover macOS **27.0 (26A428)** on Apple silicon: local saves and folder sync, light/dark/system appearance, command-panel sizing and scrolling, editor recovery, and on-device grammar, translation, summary, and cancellation. This is a tested build, not a guarantee for every later OS update or Mac configuration. Spotlight indexing is included; macOS controls its ranking. Cross-device iCloud delivery still depends on iCloud itself.
 
 ## Use the app
 
@@ -136,6 +143,14 @@ Search **Writing Tools** in Actions (⌘K) for spelling and grammar, clearer wri
 
 These commands use Apple's on-device model and require **macOS 26 or newer, a supported Mac, and Apple Intelligence enabled with its model downloaded**. They have no API key or subscription. Your note text is processed on this Mac. Editing and iCloud saving still work on macOS 14 or newer without writing assistance. Long notes are processed in passages; editing commands preserve fenced code blocks. Generated suggestions should be reviewed for meaning and formatting before replacement.
 
+### Apple Spotlight
+
+Open Lilt once after installing this version. In Apple Spotlight, type **Lilt Notes**, select the app in Applications, and press **Tab** to search its current notes. Select a result and press Return to open that note in Lilt. App-scoped Tab search requires macOS 26 or newer.
+
+Titles and note text are indexed locally by macOS. Lilt supplies each note’s last-edit date and recency ranking, independent of pins and when you last opened a note. Spotlight controls its final result order and may weigh relevance or usage differently; apps cannot enforce an exact sort order in the system search window. Lilt updates the index shortly after saving and removes notes moved to Recently Deleted. Imported and synced changes are included when Lilt saves them. Indexing is asynchronous, so an edit may take a few seconds to appear.
+
+If the app’s Tab view is empty, launch Lilt and allow time for indexing, then check that Lilt is allowed in the Mac’s Spotlight search settings. Each Mac builds its own index from its local Lilt library; the index itself is not synced through iCloud. A third-party launcher may use Command-Space instead of Apple Spotlight.
+
 ## Notes and data
 
 Notes are unlimited. New Note reuses an existing unpinned empty draft, so repeated shortcuts do not leave a trail of blank notes. Pinned, deleted, and meaningful notes are preserved. Search includes their titles and bodies. Pinned notes sort first. Deleted notes can be previewed and restored from **Actions → Recently Deleted**. They remain recoverable until you choose **Delete Permanently**; there is no 60-day expiry.
@@ -156,7 +171,7 @@ Changes are written to the notes folder after saving. The folder is also checked
 
 - **Folder sync is not a general folder watcher.** Existing Lilt-managed Markdown files are refreshed automatically. To add arbitrary `.md`, `.txt`, or `.html` files, use **Import Notes** (Command-O); simply dropping unrelated files into the folder does not add them to the library. Re-importing ordinary files creates additional notes.
 - Rich formatting such as underline, highlights, and embedded images can differ between Markdown editors. Keep a library backup or the `.lilt` metadata if you want Lilt’s full representation.
-- Search is a case-insensitive, in-memory scan of note titles and content. Every whitespace-separated search term must match. There is no fuzzy search, OCR, or separate search index, and no guaranteed latency for very large libraries or image-heavy notes.
+- In-app search is a case-insensitive, in-memory scan of note titles and content. Every whitespace-separated search term must match. In-app search does not use fuzzy matching, OCR, or the macOS Spotlight index, and has no guaranteed latency for very large libraries or image-heavy notes.
 - Sync relies on your chosen folder provider. Lilt checks local folder changes every eight seconds; remote arrival also depends on iCloud and your connection. It does not provide live collaborative editing. Avoid editing the same note simultaneously on different devices.
 - Lilt does not add application-level encryption. Local files and exports are readable by software with access to them. iCloud’s own account and storage protections are separate.
 - The native close button hides the note window; **Quit** stops the app. When a command panel is open, the close control hides temporarily so it cannot overlap that panel in narrow windows.
@@ -185,6 +200,8 @@ node --version
 xcrun --show-sdk-version
 xcrun --find swiftc
 ```
+
+Use the macOS 27 SDK for the current Golden Gate integration. The scripts detect the SDK and keep SDK 26 source builds working.
 
 Install Apple’s developer tools if needed (`xcode-select --install`), or select an installed Xcode that includes the macOS 26 SDK or newer. An older SDK cannot compile the optional FoundationModels integration, even though the resulting app targets macOS 14. The build currently targets `arm64-apple-macosx14.0`; changing that flag alone does not establish Intel support.
 
@@ -240,6 +257,14 @@ To run the native sizing, command navigation, and close/reopen audit:
   --data-dir "$PWD/build/sizing-test" \
   --sizing-audit "$PWD/build/sizing-audit.json"
 ```
+
+For a repeatable native compatibility check, run:
+
+```sh
+zsh scripts/check-compatibility.sh
+```
+
+This builds a separate test app, checks light/dark/system appearances with native materials and with the standard fallback, exercises editor recovery and 24 window/menu combinations, and writes reports under `build/compatibility.*`. It uses synthetic notes, does not register global shortcuts or sync to iCloud, and quits each test process automatically. The test requires a logged-in macOS desktop and Python 3 (included with the developer tools).
 
 The audit creates synthetic notes, exercises three window sizes and both auto-size settings, and writes a JSON report. Keep that test app open until the report appears, then quit it. Use a fresh test directory if another test instance is running. Automated checks complement manual UI testing; they do not certify all macOS versions, physical global shortcuts in every app, or end-to-end iCloud delivery to another device.
 

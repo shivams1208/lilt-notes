@@ -98,6 +98,7 @@ extension AppDelegate {
             report["checks"]=checks
             self.writeWindowAudit()
             if let data=try? JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]){try? data.write(to:output)}
+            if self.args.contains("--quit-after-audit"){DispatchQueue.main.async{NSApp.terminate(nil)}}
         }
     }
 }
