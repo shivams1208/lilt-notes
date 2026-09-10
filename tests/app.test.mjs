@@ -7,6 +7,18 @@ const bundle=readFileSync(new URL('../web/bundle.js',import.meta.url),'utf8');
 function app(){const dom=new JSDOM(html,{url:'https://local.test/',pretendToBeVisual:true,runScripts:'dangerously'});const w=dom.window,messages=[];w.structuredClone=structuredClone;w.webkit={messageHandlers:{lilt:{postMessage(m){messages.push(m)}}}};w.Range.prototype.getBoundingClientRect=()=>({top:0,left:0,right:0,bottom:0,width:0,height:0});w.Range.prototype.getClientRects=()=>[];w.HTMLElement.prototype.scrollIntoView=()=>{};w.eval(bundle);return {w,messages,close:()=>{w.Lilt.editor.destroy();w.close();}};}
 const note=(id,markdown,extra={})=>({id,markdown,doc:null,text:markdown,title:markdown,pinned:false,createdAt:1,updatedAt:1,deletedAt:null,...extra});
 const library=(notes,id)=>({version:1,notes,currentId:id,settings:{autoSize:false},snippets:[]});
+test('opening and rendering notes preserves edit time while an actual edit updates it',()=>{
+ const a=app();try{
+  a.w.Lilt.init(library([note('old','# Old note',{updatedAt:1000}),note('new','New note',{updatedAt:5000})],'new'));
+  assert.equal(a.w.Lilt.state().notes.find(n=>n.id==='new').updatedAt,5000);
+  a.w.Lilt.openNote('old');
+  assert.equal(a.w.Lilt.state().notes.find(n=>n.id==='old').updatedAt,1000);
+  a.w.Lilt.flush();
+  assert.equal(a.w.Lilt.state().notes.find(n=>n.id==='old').updatedAt,1000);
+  a.w.Lilt.editor.commands.insertContent(' edited');
+  assert.ok(a.w.Lilt.state().notes.find(n=>n.id==='old').updatedAt>5000);
+ }finally{a.close();}
+});
 test('keyboard navigation keeps command rows stable through repeated scrolling',()=>{
  const a=app();try{
   a.w.Lilt.init(library([note('a','Keep me')],'a'));a.w.Lilt.action('actions');
