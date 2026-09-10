@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import CoreSpotlight
 
 extension AppDelegate {
     static let integrationText = "# Prefilled note\n\nA+B & 50% — café 🚀\n\n- [ ] Review [link](https://example.com?a=1&b=2)\n\n```swift\nlet n = 7\n```"
@@ -44,6 +45,21 @@ extension AppDelegate {
                 let reopened=try await state()
                 try require(reopened["id"] as? String==id,"Existing-note URL opened the wrong note")
                 report["existingNoteURL"]=true
+                let activity=NSUserActivity(activityType:CSSearchableItemActionType)
+                activity.userInfo=[CSSearchableItemActivityIdentifier:second["id"] as? String ?? ""]
+                try require(self.application(NSApp,continue:activity,restorationHandler:{_ in}),"Spotlight activity was not handled")
+                let spotlightOpened=try await state()
+                try require(spotlightOpened["id"] as? String==second["id"] as? String,"Spotlight opened the wrong note")
+                report["spotlightActivityOpensNote"]=true
+                let wasLoaded=self.loaded;self.loaded=false
+                activity.userInfo=[CSSearchableItemActivityIdentifier:id]
+                try require(self.application(NSApp,continue:activity,restorationHandler:{_ in}),"Startup Spotlight activity was not handled")
+                self.loaded=wasLoaded
+                try require(self.pendingURLs.last?.lastPathComponent==id,"Startup Spotlight activity did not queue the note")
+                self.pendingURLs.forEach(self.handleURL);self.pendingURLs=[]
+                let spotlightQueued=try await state()
+                try require(spotlightQueued["id"] as? String==id,"Queued Spotlight activity opened the wrong note")
+                report["spotlightActivityQueuesBeforeEditorReady"]=true
                 self.application(NSApp,open:[URL(string:"liltnotes://note/missing-test-id")!])
                 let missing=try await state()
                 try require(missing["id"] as? String==id,"Missing-note URL changed the current note")

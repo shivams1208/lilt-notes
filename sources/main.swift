@@ -4,6 +4,7 @@ import Carbon
 import UniformTypeIdentifiers
 import ServiceManagement
 import Darwin
+import CoreSpotlight
 
 final class NotesPanel:NSPanel {override var canBecomeKey:Bool{true};override var canBecomeMain:Bool{true}}
 final class DragRegion:NSView {override func mouseDown(with event:NSEvent){window?.performDrag(with:event)}}
@@ -33,6 +34,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     var instanceLock:Int32 = -1
     var localKeyMonitor:Any?
     var nativeMaterialsEnabled=false,integrationAuditQueued=false
+    var compatibilityAuditStarted=false
     var overlayOpen=false,manualResizeActive=false
     var resizeEvents:[[String:Double]]=[]
     var loaded=false,settings:[String:Any]=[:],hotkeys:[EventHotKeyRef]=[],hotkeyMode="",handler:EventHandlerRef?
@@ -42,6 +44,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     var pendingURLs:[URL]=[],latestData:Data?,latestRevision=0,storeError:Error?,syncTimer:Timer?,syncFolder:URL?,syncRunning=false
     let saveQueue=DispatchQueue(label:"com.shivam.liltnotes.storage",qos:.userInitiated)
     let sync=FolderSync()
+    var spotlightIndex:SpotlightNotesIndex?
     let args=CommandLine.arguments
     var isTest:Bool{args.contains("--data-dir")}
     var receivedHotkeys:[UInt32]=[]
@@ -56,6 +59,10 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         do {vault=try Vault(directory:directory);latestData=try vault.read()}
         catch {let alert=NSAlert();alert.messageText="Lilt Notes could not open your library";alert.informativeText=error.localizedDescription;alert.runModal();NSApp.terminate(nil);return}
         configureDefaultNotesFolder();createMenu();createWindow();createStatusItem();installLocalHotkeys()
+        if !isTest || args.contains("--test-spotlight") {
+            spotlightIndex=SpotlightNotesIndex(directory:directory)
+            if let data=latestData{spotlightIndex?.update(data)}
+        }
         syncTimer=Timer.scheduledTimer(withTimeInterval:8,repeats:true){[weak self] _ in self?.syncNow();self?.writeWindowAudit()}
         show();prepareIntegrationAuditIfRequested()
     }
@@ -81,6 +88,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         let root=NSVisualEffectView(frame:bounds);root.material = .hudWindow;root.blendingMode = .behindWindow;root.state = .active;root.addSubview(content)
         root.autoresizingMask=[.width,.height];root.wantsLayer=true;root.layer?.cornerRadius=24;root.layer?.cornerCurve = .continuous;root.layer?.masksToBounds=true
         let configuration=WKWebViewConfiguration();if !args.contains("--no-glass"){nativeMaterialsEnabled=NativeAppearance.enableMaterials(configuration.preferences)};configuration.websiteDataStore = .nonPersistent();configuration.userContentController.add(self,name:"lilt")
+        configuration.userContentController.addUserScript(WKUserScript(source:"document.documentElement.toggleAttribute('data-native-materials',\(nativeMaterialsEnabled));",injectionTime:.atDocumentEnd,forMainFrameOnly:true))
         web=WKWebView(frame:content.bounds,configuration:configuration);web.autoresizingMask=[.width,.height];web.navigationDelegate=self;web.setValue(false,forKey:"drawsBackground");web.allowsBackForwardNavigationGestures=false
         content.addSubview(web)
         content.hoverChanged={ [weak self] hovering in
@@ -131,12 +139,18 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     func windowShouldClose(_ sender:NSWindow)->Bool{hide();return false}
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool{show();return true}
     func application(_ application:NSApplication,open urls:[URL]){if !loaded{pendingURLs += urls}else{urls.forEach(handleURL)}}
+    func application(_ application:NSApplication,continue userActivity:NSUserActivity,restorationHandler:@escaping ([NSUserActivityRestoring])->Void)->Bool {
+        guard userActivity.activityType==CSSearchableItemActionType,
+              let id=userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+              let url=SpotlightNote.openingURL(identifier:id) else{return false}
+        self.application(application,open:[url]);return true
+    }
     func handleURL(_ url:URL){if url.isFileURL{importURLs([url]);return};guard url.scheme=="liltnotes" else{return};show();switch url.host {case "note":js("openNote",[url.lastPathComponent]);case "new":let content=URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.first(where:{$0.name=="text"})?.value ?? "";js("action",["new",["markdown":content]]);case "search":js("action",["browse"]);default:break}}
     func js(_ method:String,_ arguments:[Any]=[],completion:((Any?,Error?)->Void)?=nil){guard JSONSerialization.isValidJSONObject(arguments),let data=try? JSONSerialization.data(withJSONObject:arguments,options:[.fragmentsAllowed]),let json=String(data:data,encoding:.utf8)else{return};web.evaluateJavaScript("window.Lilt?.\(method)(...\(json))",completionHandler:completion)}
     func userContentController(_ userContentController:WKUserContentController,didReceive message:WKScriptMessage){
         guard message.frameInfo.isMainFrame,let body=message.body as? [String:Any],let type=body["type"] as? String else{return}
         switch type {
-        case "ready":loaded=true;if let data=latestData,let object=try? JSONSerialization.jsonObject(with:data){js("init",[object])};pendingURLs.forEach(handleURL);pendingURLs=[];if vault.recoveredBackup{js("toast",["Recovered your previous saved library"])};runUIAuditIfRequested();runIntegrationAuditIfRequested();runWindowSizingAuditIfRequested()
+        case "ready":loaded=true;if let data=latestData,let object=try? JSONSerialization.jsonObject(with:data){js("init",[object])};pendingURLs.forEach(handleURL);pendingURLs=[];if vault.recoveredBackup{js("toast",["Recovered your previous saved library"])};runUIAuditIfRequested();runIntegrationAuditIfRequested();runWindowSizingAuditIfRequested();runSpotlightAuditIfRequested();runCompatibilityAuditIfRequested()
         case "save":guard let library=body["library"],let data=try? JSONSerialization.data(withJSONObject:library),let revision=body["revision"] as? Int else{return};latestData=data;latestRevision=revision;persist(data,revision:revision)
         case "settings":if let s=body["settings"] as? [String:Any]{applySettings(s)}
         case "resize":if settings["autoSize"] as? Bool != false,!manualResizeActive,!panel.inLiveResize,!overlayOpen,let h=body["height"] as? Double {resize(height:h)}
@@ -182,7 +196,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
             if self.writingRequestID==id{self.writingRequestID=nil;self.writingTask=nil}
         }
     }
-    func persist(_ data:Data,revision:Int){saveQueue.async{do{try self.vault.save(data);DispatchQueue.main.async{self.storeError=nil;self.js("saved",[revision]);self.syncNow()}}catch{DispatchQueue.main.async{self.storeError=error;self.js("error",[error.localizedDescription])}}}}
+    func persist(_ data:Data,revision:Int){saveQueue.async{do{try self.vault.save(data);DispatchQueue.main.async{self.storeError=nil;self.spotlightIndex?.update(data);self.js("saved",[revision]);self.syncNow()}}catch{DispatchQueue.main.async{self.storeError=error;self.js("error",[error.localizedDescription])}}}}
     func applySettings(_ s:[String:Any]){settings=s;panel.level=(s["alwaysOnTop"] as? Bool != false) ? .floating : .normal;let theme=s["theme"] as? String ?? "system";panel.appearance=theme=="dark" ? NSAppearance(named:.darkAqua):theme=="light" ? NSAppearance(named:.aqua):nil;let mode=s["hotkey"] as? String ?? "option";if shortcutRecording==nil && shortcutConfiguration(mode) != hotkeyConfiguration {registerHotkeys(mode)};let folder=(s["syncPath"] as? String).map{URL(fileURLWithPath:$0,isDirectory:true)};if folder?.path != syncFolder?.path || !syncAuthorized{restoreFolderAccess(folder)};if !isTest,folder != nil,!syncAuthorized,!requestedFolderAccess{requestedFolderAccess=true;DispatchQueue.main.async{self.chooseSync(defaultFolder:folder)}}}
     func resize(height:Double){let screen=panel.screen ?? NSScreen.main;let maxHeight=min(780,screen?.visibleFrame.height ?? 780);let h=max(240,min(maxHeight,height));let frame=panel.frame;if abs(frame.height-h)>2 {var next=NSRect(x:frame.minX,y:frame.maxY-h,width:frame.width,height:h);if let area=screen?.visibleFrame {next.origin.y=max(area.minY,min(next.origin.y,area.maxY-h))};panel.setFrame(next,display:true,animate:false)}}
     func shortcutConfiguration(_ mode:String)->String {
@@ -299,10 +313,49 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     func showError(_ message:String){let alert=NSAlert();alert.messageText="Lilt Notes";alert.informativeText=message;alert.beginSheetModal(for:panel,completionHandler:nil)}
     func webView(_ webView:WKWebView,decidePolicyFor navigationAction:WKNavigationAction,decisionHandler:@escaping(WKNavigationActionPolicy)->Void){if navigationAction.navigationType == .linkActivated {if let url=navigationAction.request.url,["https","http","mailto","liltnotes"].contains(url.scheme ?? ""){NSWorkspace.shared.open(url)};decisionHandler(.cancel)}else if navigationAction.request.url?.isFileURL==true || navigationAction.request.url?.absoluteString=="about:blank"{decisionHandler(.allow)}else{decisionHandler(.cancel)}}
     func webViewWebContentProcessDidTerminate(_ webView:WKWebView){writingTask?.cancel();writingTask=nil;writingRequestID=nil;loaded=false;web.reload()}
-    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {writingTask?.cancel();guard loaded else{return .terminateNow};js("flush",[],completion:{value,error in if let error=error {self.showError("Could not collect your latest edits: \(error.localizedDescription)");NSApp.reply(toApplicationShouldTerminate:false);return};let data=(value as? String)?.data(using:.utf8) ?? self.latestData;self.saveQueue.async{do{if let data=data{try self.vault.save(data)};DispatchQueue.main.async{self.syncNow();self.finishTermination(deadline:Date().addingTimeInterval(3))}}catch{DispatchQueue.main.async{self.showError("Could not save your notes: \(error.localizedDescription)");NSApp.reply(toApplicationShouldTerminate:false)}}}});return .terminateLater}
-    func finishTermination(deadline:Date){
+    /// AppKit can run a nested event loop while waiting for .terminateLater.
+    /// A completion on DispatchQueue.main cannot run if Quit entered from that
+    /// same queue. Run-loop blocks keep saving and termination moving in that case.
+    nonisolated static func duringTermination(_ work:@escaping @MainActor ()->Void) {
+        RunLoop.main.perform(inModes:[.default,.modalPanel,.eventTracking]) {
+            MainActor.assumeIsolated {work()}
+        }
+    }
+    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {
+        writingTask?.cancel()
+        guard loaded else{return .terminateNow}
+        js("flush",[],completion:{value,error in
+            if let error=error {
+                NSApp.reply(toApplicationShouldTerminate:false)
+                self.showError("Could not collect your latest edits: \(error.localizedDescription)")
+                return
+            }
+            let data=(value as? String)?.data(using:.utf8) ?? self.latestData
+            self.saveQueue.async {
+                do {
+                    if let data=data{try self.vault.save(data)}
+                    Self.duringTermination {
+                        self.syncNow()
+                        self.finishTermination(deadline:Date().addingTimeInterval(3))
+                    }
+                }catch {
+                    Self.duringTermination {
+                        NSApp.reply(toApplicationShouldTerminate:false)
+                        self.showError("Could not save your notes: \(error.localizedDescription)")
+                    }
+                }
+            }
+        })
+        return .terminateLater
+    }
+    func finishTermination(deadline:Date) {
         if !syncRunning || Date()>=deadline{NSApp.reply(toApplicationShouldTerminate:true)}
-        else{DispatchQueue.main.asyncAfter(deadline:.now()+0.1){self.finishTermination(deadline:deadline)}}
+        else {
+            let timer=Timer(timeInterval:0.1,repeats:false){_ in
+                MainActor.assumeIsolated {self.finishTermination(deadline:deadline)}
+            }
+            RunLoop.main.add(timer,forMode:.common)
+        }
     }
     func runUIAuditIfRequested(){guard isTest,let i=args.firstIndex(of:"--ui-audit"),i+1<args.count else{return};let output=URL(fileURLWithPath:args[i+1]);DispatchQueue.main.asyncAfter(deadline:.now()+1){
         let script="""
