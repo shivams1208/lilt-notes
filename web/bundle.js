@@ -64383,7 +64383,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   function current() {
     return library.notes.find((n) => n.id === library.currentId);
   }
-  function capture() {
+  function capture({ preserveEditedAt = false } = {}) {
     const n = current();
     if (!n || loading || n.deletedAt) return;
     let markdown2, doc3, text;
@@ -64397,7 +64397,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       text = plainText(editor);
     }
     if (n.markdown !== markdown2 || JSON.stringify(n.doc) !== JSON.stringify(doc3)) {
-      Object.assign(n, { markdown: markdown2, doc: doc3, text, title: noteTitle(text), updatedAt: Date.now() });
+      Object.assign(n, { markdown: markdown2, doc: doc3, text, title: noteTitle(text), updatedAt: preserveEditedAt ? n.updatedAt : Date.now() });
     }
   }
   function scheduleSave() {
@@ -64483,7 +64483,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     editor.commands.setContent(n.doc || n.markdown, { contentType: n.doc ? "json" : "markdown", emitUpdate: false });
     editor.view.updateState(EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.state.plugins }));
     loading = false;
-    capture();
+    capture({ preserveEditedAt: true });
     closeOverlay();
     if (record) {
       history2 = history2.slice(0, historyIndex + 1);
@@ -65099,7 +65099,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
   function settingsForm() {
     const s = library.settings;
-    formShell("Settings", `<div class="setting-row"><span>Appearance</span><select id="setting-theme" aria-label="Appearance">${["system", "light", "dark"].map((t) => `<option value="${t}" ${s.theme === t ? "selected" : ""}>${t[0].toUpperCase() + t.slice(1)}</option>`).join("")}</select></div><div class="setting-row"><span>Text size</span><select id="setting-zoom" aria-label="Text size">${[80, 90, 100, 110, 125, 150, 175, 200].map((z2) => `<option ${s.zoom === z2 ? "selected" : ""} value="${z2}">${z2}%</option>`).join("")}</select></div><label class="checkfield"><input type="checkbox" id="setting-top" ${s.alwaysOnTop ? "checked" : ""}>Keep above other windows</label><label class="checkfield"><input type="checkbox" id="setting-size" ${s.autoSize ? "checked" : ""}>Grow window with note content</label><label class="checkfield"><input type="checkbox" id="setting-spell" ${s.spellcheck ? "checked" : ""}>Check spelling while typing</label><div class="setting-row"><span>Global shortcuts</span><select id="setting-hotkey" aria-label="Global shortcuts"><option value="option" ${s.hotkey === "option" ? "selected" : ""}>\u2325 N / \u21E7\u2325 N / \u2325 P</option><option value="controlOption" ${s.hotkey === "controlOption" ? "selected" : ""}>\u2303\u2325 N / \u21E7\u2303\u2325 N / \u2303\u2325 P</option><option value="none" ${s.hotkey === "none" ? "selected" : ""}>Disabled</option></select></div><p>Toggle Notes / Create Note / Search Notes. If another app uses a shortcut, choose the second set.</p><div class="setting-row"><span>Open at login</span><button class="secondary" id="login-settings">Configure\u2026</button></div><hr style="border:0;border-top:1px solid var(--border);margin:20px 0"><div class="setting-row"><span>Notes folder</span><button class="secondary" id="sync-folder">${s.syncPath ? "Change Folder\u2026" : "Choose Folder\u2026"}</button></div><p>${s.syncPath ? esc(s.syncPath) : "Choose a folder in iCloud Drive, Dropbox, or another service you already use. iCloud Drive is used by default when available."} Each note is saved as a Markdown file you can open on other devices. Notes save here automatically. No encryption or Keychain is used.</p><button class="secondary" id="icloud-folder">Use iCloud Drive</button> ${s.syncPath ? '<button class="secondary" id="reveal-folder">Open Folder</button> <button class="secondary" id="sync-disable">Save Only on This Mac</button>' : ""}<p>Lilt Notes 1.0 \xB7 Unlimited notes \xB7 No account required</p>`);
+    formShell("Settings", `<div class="setting-row"><span>Appearance</span><select id="setting-theme" aria-label="Appearance">${["system", "light", "dark"].map((t) => `<option value="${t}" ${s.theme === t ? "selected" : ""}>${t[0].toUpperCase() + t.slice(1)}</option>`).join("")}</select></div><div class="setting-row"><span>Text size</span><select id="setting-zoom" aria-label="Text size">${[80, 90, 100, 110, 125, 150, 175, 200].map((z2) => `<option ${s.zoom === z2 ? "selected" : ""} value="${z2}">${z2}%</option>`).join("")}</select></div><label class="checkfield"><input type="checkbox" id="setting-top" ${s.alwaysOnTop ? "checked" : ""}>Keep above other windows</label><label class="checkfield"><input type="checkbox" id="setting-size" ${s.autoSize ? "checked" : ""}>Grow window with note content</label><label class="checkfield"><input type="checkbox" id="setting-spell" ${s.spellcheck ? "checked" : ""}>Check spelling while typing</label><div class="setting-row"><span>Global shortcuts</span><select id="setting-hotkey" aria-label="Global shortcuts"><option value="option" ${s.hotkey === "option" ? "selected" : ""}>\u2325 N / \u21E7\u2325 N / \u2325 P</option><option value="controlOption" ${s.hotkey === "controlOption" ? "selected" : ""}>\u2303\u2325 N / \u21E7\u2303\u2325 N / \u2303\u2325 P</option><option value="none" ${s.hotkey === "none" ? "selected" : ""}>Disabled</option></select></div><p>Toggle Notes / Create Note / Search Notes. If another app uses a shortcut, choose the second set.</p><div class="setting-row"><span>Open at login</span><button class="secondary" id="login-settings">Configure\u2026</button></div><hr style="border:0;border-top:1px solid var(--border);margin:20px 0"><div class="setting-row"><span>Notes folder</span><button class="secondary" id="sync-folder">${s.syncPath ? "Change Folder\u2026" : "Choose Folder\u2026"}</button></div><p>${s.syncPath ? esc(s.syncPath) : "Choose a folder in iCloud Drive, Dropbox, or another service you already use. iCloud Drive is used by default when available."} Each note is saved as a Markdown file you can open on other devices. Notes save here automatically. No encryption or Keychain is used.</p><button class="secondary" id="icloud-folder">Use iCloud Drive</button> ${s.syncPath ? '<button class="secondary" id="reveal-folder">Open Folder</button> <button class="secondary" id="sync-disable">Save Only on This Mac</button>' : ""}<p>Lilt Notes 1.1 \xB7 Unlimited notes \xB7 No account required</p>`);
     for (const [id, key, isBool] of [["theme", "theme", false], ["zoom", "zoom", false], ["top", "alwaysOnTop", true], ["size", "autoSize", true], ["spell", "spellcheck", true], ["hotkey", "hotkey", false]]) $2("#setting-" + id).onchange = (e) => {
       s[key] = isBool ? e.target.checked : key === "zoom" ? Number(e.target.value) : e.target.value;
       applySettings();

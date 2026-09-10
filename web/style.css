@@ -105,13 +105,13 @@ body{background:linear-gradient(color-mix(in srgb,var(--theme-bg) 40%,transparen
 :root[data-theme=dark]{color-scheme:dark}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark}}
 @supports (-apple-visual-effect:-apple-system-glass-material){
- #overlay,#format-menu,#inline-emoji,#findbar{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;outline:none;isolation:isolate;overflow:hidden}
- .toolbar,.format-pill,#format-toggle{position:relative;isolation:isolate;overflow:hidden;background:transparent;box-shadow:none}
- :is(#overlay,#format-menu,#inline-emoji,#findbar,.toolbar,.format-pill,#format-toggle)::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;-apple-visual-effect:-apple-system-glass-material}
- :is(.toolbar,.format-pill,#format-toggle)::before{-apple-visual-effect:-apple-system-glass-material-media-controls}
- #overlay,#format-menu,#inline-emoji{border:1px solid transparent;box-shadow:0 8px 20px #0002}
- :root[data-window-inactive] :is(.toolbar,.format-pill,#format-toggle)::before{-apple-visual-effect:none;background:color-mix(in srgb,var(--panel) 90%,transparent)}
- :root[data-window-inactive] :is(.toolbar,.format-pill,#format-toggle)>*{opacity:.4}
+ :root[data-native-materials] :is(#overlay,#format-menu,#inline-emoji,#findbar){background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;outline:none;isolation:isolate;overflow:hidden}
+ :root[data-native-materials] :is(.toolbar,.format-pill,#format-toggle){position:relative;isolation:isolate;overflow:hidden;background:transparent;box-shadow:none}
+ :root[data-native-materials] :is(#overlay,#format-menu,#inline-emoji,#findbar,.toolbar,.format-pill,#format-toggle)::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;-apple-visual-effect:-apple-system-glass-material}
+ :root[data-native-materials] :is(.toolbar,.format-pill,#format-toggle)::before{-apple-visual-effect:-apple-system-glass-material-media-controls}
+ :root[data-native-materials] :is(#overlay,#format-menu,#inline-emoji){border:1px solid transparent;box-shadow:0 8px 20px #0002}
+ :root[data-native-materials][data-window-inactive] :is(.toolbar,.format-pill,#format-toggle)::before{-apple-visual-effect:none;background:color-mix(in srgb,var(--panel) 90%,transparent)}
+ :root[data-native-materials][data-window-inactive] :is(.toolbar,.format-pill,#format-toggle)>*{opacity:.4}
 }
 
 #inline-emoji,#format-menu{padding:0;display:flex;flex-direction:column;overflow:hidden}.emoji-options,.format-options{padding:6px;overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:0 1 auto}
