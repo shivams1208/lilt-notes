@@ -60,7 +60,7 @@ The release is **arm64 only**. Intel Macs, Windows, Linux, iPhone, and iPad do n
 
 ### Download the app
 
-1. Open the [Releases page](https://github.com/shivams1208/lilt-notes/releases/latest) and download `Lilt-Notes-1.1.0-macOS-arm64.zip`.
+1. Open the [Releases page](https://github.com/shivams1208/lilt-notes/releases/latest) and download `Lilt-Notes-1.1.2-macOS-arm64.zip`.
 2. Unzip it and drag **Lilt Notes.app** into **Applications**.
 3. Open the app. Look for the pencil icon in the menu bar; there is no normal Dock icon.
 4. If prompted for a notes folder, select **iCloud Drive → Lilt Notes**, or choose another folder. You can change this later in Settings.
@@ -71,7 +71,7 @@ The downloadable build is **ad-hoc signed and not notarized**. macOS may require
 A `SHA256SUMS.txt` file accompanies each release. You can compare its app hash with:
 
 ```sh
-shasum -a 256 Lilt-Notes-1.1.0-macOS-arm64.zip
+shasum -a 256 Lilt-Notes-1.1.2-macOS-arm64.zip
 ```
 
 ### Updates and moving to another Mac
@@ -153,9 +153,13 @@ If the app’s Tab view is empty, launch Lilt and allow time for indexing, then 
 
 ## Notes and data
 
+From version 1.1.2, summoning Notes brings it onto the display containing your pointer. Its size and position are preserved when they fit; a window left on a disconnected display is brought back into view. The toggle shortcut hides Notes only when it is visible and focused. Holding the shortcut does not repeatedly toggle it. If **Keep above other windows** is off, Notes floats while you use it and returns to normal stacking when focus leaves.
+
 Notes are unlimited. New Note reuses an existing unpinned empty draft, so repeated shortcuts do not leave a trail of blank notes. Pinned, deleted, and meaningful notes are preserved. Search includes their titles and bodies. Pinned notes sort first. Deleted notes can be previewed and restored from **Actions → Recently Deleted**. They remain recoverable until you choose **Delete Permanently**; there is no 60-day expiry.
 
 Export a note as Markdown, plain text, or HTML, or use the native Share menu. Export a library backup from Actions to preserve all notes, rich formatting, pins, and snippets. Restoring a backup merges notes by ID and modification time. A backup is a readable JSON file; store it somewhere you trust.
+
+From version 1.1.1, earlier note contents are also saved locally under `~/Library/Application Support/Lilt Notes/history/<note-id>/`. These JSON records retain recent exact edits and hourly/daily checkpoints for recovery; they are not uploaded or included in Library Backup exports. Unchanged saves and preference changes do not replace the previous content backup. Permanently deleting a note removes its local history as well.
 
 Notes use **iCloud Drive → Lilt Notes** by default. The first folder picker remembers access to that folder; it does not need to be selected again after restarting. Each note is saved as a readable Markdown file. On an iPhone or iPad, open **Files → iCloud Drive → Lilt Notes** using the same Apple Account. You can also access the files through iCloud Drive on another Mac, Windows, or iCloud.com. A Markdown editor can open and edit them. Lilt itself is currently a Mac app.
 
@@ -235,10 +239,10 @@ The UI is bundled locally inside a WKWebView. Native operations pass through a s
 zsh scripts/test.sh
 ```
 
-This rebuilds the browser bundle, runs the JavaScript tests, and compiles/runs the Swift storage, folder-sync, shortcut, and writing-helper tests. It uses synthetic notes and temporary folders. Optional real-model verification, on a Mac with Apple Intelligence ready:
+This rebuilds the browser bundle, runs the JavaScript tests, and compiles/runs the Swift storage, folder-sync, shortcut, and writing-helper tests. It uses synthetic notes and temporary folders, and removes the compiled test executables when it exits. Optional real-model verification, on a Mac with Apple Intelligence ready:
 
 ```sh
-./build/writing-tests --live
+LILT_TEST_LIVE=1 zsh scripts/test.sh
 ```
 
 For manual UI testing with a separate library:
@@ -264,7 +268,7 @@ For a repeatable native compatibility check, run:
 zsh scripts/check-compatibility.sh
 ```
 
-This builds a separate test app, checks light/dark/system appearances with native materials and with the standard fallback, exercises editor recovery and 24 window/menu combinations, and writes reports under `build/compatibility.*`. It uses synthetic notes, does not register global shortcuts or sync to iCloud, and quits each test process automatically. The test requires a logged-in macOS desktop and Python 3 (included with the developer tools).
+This builds a separate test app, checks light/dark/system appearances with native materials and with the standard fallback, exercises editor recovery and 24 window/menu combinations, and writes reports under `build/compatibility.*`. It uses synthetic notes, does not register global shortcuts or sync to iCloud, and quits each test process automatically. The temporary test app is unregistered and removed when the script exits, including on failure. Synthetic test libraries are also removed; verification reports remain for inspection. The test requires a logged-in macOS desktop and Python 3 (included with the developer tools).
 
 The audit creates synthetic notes, exercises three window sizes and both auto-size settings, and writes a JSON report. Keep that test app open until the report appears, then quit it. Use a fresh test directory if another test instance is running. Automated checks complement manual UI testing; they do not certify all macOS versions, physical global shortcuts in every app, or end-to-end iCloud delivery to another device.
 

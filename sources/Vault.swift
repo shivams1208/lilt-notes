@@ -31,14 +31,52 @@ final class Vault {
         }
     }
     func save(_ data:Data)throws {
-        _ = try Self.validate(data)
-        if let old=try? Data(contentsOf:file), (try? Self.validate(old)) != nil {
-            let backup=directory.appendingPathComponent("library.previous.json")
-            try old.write(to:backup,options:.atomic)
-            try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:backup.path)
+        let next=try Self.validate(data)
+        if let old=try? Data(contentsOf:file),let previous=try? Self.validate(old) {
+            if NSDictionary(dictionary:previous).isEqual(to:next){return}
+            try preserveHistory(previous:previous,next:next)
+            // Opening a note or saving unchanged content must not consume the
+            // previous content backup by rotating an identical library into it.
+            if !NSDictionary(dictionary:["notes":previous["notes"] ?? [],"snippets":previous["snippets"] ?? []]).isEqual(to:["notes":next["notes"] ?? [],"snippets":next["snippets"] ?? []]) {
+                let backup=directory.appendingPathComponent("library.previous.json")
+                try old.write(to:backup,options:.atomic)
+                try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:backup.path)
+            }
         }
         try data.write(to:file,options:.atomic)
         try FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:file.path)
     }
+    private func preserveHistory(previous:[String:Any],next:[String:Any])throws {
+        let fm=FileManager.default,now=Date()
+        let nextNotes=Dictionary(uniqueKeysWithValues:(next["notes"] as! [[String:Any]]).map{($0["id"] as! String,$0)})
+        for old in previous["notes"] as! [[String:Any]] {
+            guard let id=old["id"] as? String,UUID(uuidString:id) != nil else{continue}
+            let folder=directory.appendingPathComponent("history").appendingPathComponent(id)
+            let replacement=nextNotes[id]
+            if replacement?["purgedAt"] is NSNumber {
+                if fm.fileExists(atPath:folder.path){try fm.removeItem(at:folder)}
+                continue
+            }
+            guard !(old["purgedAt"] is NSNumber),
+                  replacement == nil || !NSDictionary(dictionary:["markdown":old["markdown"] ?? "","doc":old["doc"] ?? NSNull()]).isEqual(to:["markdown":replacement?["markdown"] ?? "","doc":replacement?["doc"] ?? NSNull()]) else{continue}
+            try fm.createDirectory(at:folder,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
+            let filename="\(Int64(now.timeIntervalSince1970*1000))-\(UUID().uuidString.lowercased()).json"
+            let target=folder.appendingPathComponent(filename)
+            try JSONSerialization.data(withJSONObject:old,options:[.sortedKeys]).write(to:target,options:.atomic)
+            try fm.setAttributes([.posixPermissions:0o600],ofItemAtPath:target.path)
+            // Keep recent exact edits plus hourly/day checkpoints, so normal
+            // typing does not immediately evict all older recoverable content.
+            let versions=try fm.contentsOfDirectory(at:folder,includingPropertiesForKeys:[.contentModificationDateKey])
+                .filter{$0.pathExtension=="json"}
+                .map{($0,(try $0.resourceValues(forKeys:[.contentModificationDateKey])).contentModificationDate ?? .distantPast)}
+                .sorted{$0.1>$1.1}
+            var hours=Set<Int>(),days=Set<Int>()
+            for (index,version) in versions.enumerated() {
+                let age=now.timeIntervalSince(version.1),hour=Int(version.1.timeIntervalSince1970/3600),day=Int(version.1.timeIntervalSince1970/86400)
+                let hourly=age<86400 && hours.insert(hour).inserted
+                let daily=age<30*86400 && days.insert(day).inserted
+                if index>=20 && !hourly && !daily {try fm.removeItem(at:version.0)}
+            }
+        }
+    }
 }
-

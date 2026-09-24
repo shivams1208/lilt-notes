@@ -64469,8 +64469,8 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   window.addEventListener("resize", autoSize);
   document.fonts?.ready.then(autoSize);
   $2("#writing").addEventListener("load", autoSize, true);
-  function selectNote(id, { record = true } = {}) {
-    capture();
+  function selectNote(id, { record = true, captureCurrent = true } = {}) {
+    if (captureCurrent) capture();
     closeFind();
     const n = library.notes.find((x2) => x2.id === id && !x2.deletedAt);
     if (!n) return;
@@ -65099,7 +65099,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
   function settingsForm() {
     const s = library.settings;
-    formShell("Settings", `<div class="setting-row"><span>Appearance</span><select id="setting-theme" aria-label="Appearance">${["system", "light", "dark"].map((t) => `<option value="${t}" ${s.theme === t ? "selected" : ""}>${t[0].toUpperCase() + t.slice(1)}</option>`).join("")}</select></div><div class="setting-row"><span>Text size</span><select id="setting-zoom" aria-label="Text size">${[80, 90, 100, 110, 125, 150, 175, 200].map((z2) => `<option ${s.zoom === z2 ? "selected" : ""} value="${z2}">${z2}%</option>`).join("")}</select></div><label class="checkfield"><input type="checkbox" id="setting-top" ${s.alwaysOnTop ? "checked" : ""}>Keep above other windows</label><label class="checkfield"><input type="checkbox" id="setting-size" ${s.autoSize ? "checked" : ""}>Grow window with note content</label><label class="checkfield"><input type="checkbox" id="setting-spell" ${s.spellcheck ? "checked" : ""}>Check spelling while typing</label><div class="setting-row"><span>Global shortcuts</span><select id="setting-hotkey" aria-label="Global shortcuts"><option value="option" ${s.hotkey === "option" ? "selected" : ""}>\u2325 N / \u21E7\u2325 N / \u2325 P</option><option value="controlOption" ${s.hotkey === "controlOption" ? "selected" : ""}>\u2303\u2325 N / \u21E7\u2303\u2325 N / \u2303\u2325 P</option><option value="none" ${s.hotkey === "none" ? "selected" : ""}>Disabled</option></select></div><p>Toggle Notes / Create Note / Search Notes. If another app uses a shortcut, choose the second set.</p><div class="setting-row"><span>Open at login</span><button class="secondary" id="login-settings">Configure\u2026</button></div><hr style="border:0;border-top:1px solid var(--border);margin:20px 0"><div class="setting-row"><span>Notes folder</span><button class="secondary" id="sync-folder">${s.syncPath ? "Change Folder\u2026" : "Choose Folder\u2026"}</button></div><p>${s.syncPath ? esc(s.syncPath) : "Choose a folder in iCloud Drive, Dropbox, or another service you already use. iCloud Drive is used by default when available."} Each note is saved as a Markdown file you can open on other devices. Notes save here automatically. No encryption or Keychain is used.</p><button class="secondary" id="icloud-folder">Use iCloud Drive</button> ${s.syncPath ? '<button class="secondary" id="reveal-folder">Open Folder</button> <button class="secondary" id="sync-disable">Save Only on This Mac</button>' : ""}<p>Lilt Notes 1.1 \xB7 Unlimited notes \xB7 No account required</p>`);
+    formShell("Settings", `<div class="setting-row"><span>Appearance</span><select id="setting-theme" aria-label="Appearance">${["system", "light", "dark"].map((t) => `<option value="${t}" ${s.theme === t ? "selected" : ""}>${t[0].toUpperCase() + t.slice(1)}</option>`).join("")}</select></div><div class="setting-row"><span>Text size</span><select id="setting-zoom" aria-label="Text size">${[80, 90, 100, 110, 125, 150, 175, 200].map((z2) => `<option ${s.zoom === z2 ? "selected" : ""} value="${z2}">${z2}%</option>`).join("")}</select></div><label class="checkfield"><input type="checkbox" id="setting-top" ${s.alwaysOnTop ? "checked" : ""}>Keep above other windows</label><label class="checkfield"><input type="checkbox" id="setting-size" ${s.autoSize ? "checked" : ""}>Grow window with note content</label><label class="checkfield"><input type="checkbox" id="setting-spell" ${s.spellcheck ? "checked" : ""}>Check spelling while typing</label><div class="setting-row"><span>Global shortcuts</span><select id="setting-hotkey" aria-label="Global shortcuts"><option value="option" ${s.hotkey === "option" ? "selected" : ""}>\u2325 N / \u21E7\u2325 N / \u2325 P</option><option value="controlOption" ${s.hotkey === "controlOption" ? "selected" : ""}>\u2303\u2325 N / \u21E7\u2303\u2325 N / \u2303\u2325 P</option><option value="none" ${s.hotkey === "none" ? "selected" : ""}>Disabled</option></select></div><p>Toggle Notes / Create Note / Search Notes. If another app uses a shortcut, choose the second set.</p><div class="setting-row"><span>Open at login</span><button class="secondary" id="login-settings">Configure\u2026</button></div><hr style="border:0;border-top:1px solid var(--border);margin:20px 0"><div class="setting-row"><span>Notes folder</span><button class="secondary" id="sync-folder">${s.syncPath ? "Change Folder\u2026" : "Choose Folder\u2026"}</button></div><p>${s.syncPath ? esc(s.syncPath) : "Choose a folder in iCloud Drive, Dropbox, or another service you already use. iCloud Drive is used by default when available."} Each note is saved as a Markdown file you can open on other devices. Notes save here automatically. No encryption or Keychain is used.</p><button class="secondary" id="icloud-folder">Use iCloud Drive</button> ${s.syncPath ? '<button class="secondary" id="reveal-folder">Open Folder</button> <button class="secondary" id="sync-disable">Save Only on This Mac</button>' : ""}<p>Lilt Notes 1.1.2 \xB7 Unlimited notes \xB7 No account required</p>`);
     for (const [id, key, isBool] of [["theme", "theme", false], ["zoom", "zoom", false], ["top", "alwaysOnTop", true], ["size", "autoSize", true], ["spell", "spellcheck", true], ["hotkey", "hotkey", false]]) $2("#setting-" + id).onchange = (e) => {
       s[key] = isBool ? e.target.checked : key === "zoom" ? Number(e.target.value) : e.target.value;
       applySettings();
@@ -65671,9 +65671,10 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     importBackup(data) {
       try {
         const incoming = normalizeLibrary(data);
+        capture();
         library = mergeLibraries(library, incoming);
         for (const s of incoming.snippets) if (!library.snippets.some((x2) => x2.id === s.id)) library.snippets.push(s);
-        selectNote(library.currentId);
+        selectNote(library.currentId, { captureCurrent: false });
         toast("Backup merged into your library");
       } catch (e) {
         toast(e.message);
@@ -65686,7 +65687,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       applySettings();
       if (JSON.stringify(current()) !== old) {
         const next = current()?.deletedAt ? searchNotes(library.notes, "")[0] : current();
-        if (next) selectNote(next.id);
+        if (next) selectNote(next.id, { captureCurrent: false });
         else newNote();
       }
       save();

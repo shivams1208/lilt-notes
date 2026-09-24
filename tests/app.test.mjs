@@ -115,6 +115,40 @@ test('new note, trash, and restore retain all note data',()=>{const a=app();try{
 test('source editing persists and returns to formatted editing',()=>{const a=app();try{a.w.Lilt.init(library([note('a','Original')],'a'));a.w.Lilt.action('source');const source=a.w.document.querySelector('#source');source.value='# Changed\n\n**Important**';source.dispatchEvent(new a.w.Event('input'));a.w.Lilt.action('source');assert.match(a.w.Lilt.editor.getHTML(),/<h1>Changed/);assert.match(a.w.Lilt.editor.getHTML(),/<strong>Important/);assert.match(JSON.parse(a.w.Lilt.flush()).notes[0].markdown,/Changed/);}finally{a.close();}});
 test('search action opens the chosen note and persists selection',()=>{const a=app();try{a.w.Lilt.init(library([note('a','Apples'),note('b','Bananas')],'a'));a.w.Lilt.action('browse');const input=a.w.document.querySelector('#overlay-search');input.value='bananas';input.dispatchEvent(new a.w.Event('input'));a.w.document.querySelector('[data-index="0"]').click();assert.equal(a.w.Lilt.state().currentId,'b');assert.equal(a.w.Lilt.editor.getText(),'Bananas');}finally{a.close();}});
 test('remote newer notes merge without losing local newer notes',()=>{const a=app();try{a.w.Lilt.init(library([note('a','Local',{updatedAt:10})],'a'));a.w.Lilt.merge(library([note('b','Remote',{updatedAt:20})],'b'));assert.equal(a.w.Lilt.state().notes.length,2);assert.match(a.w.Lilt.editor.getText(),/Local/);}finally{a.close();}});
+test('sync replaces the open note with newer remote content without writing the old editor over it',()=>{
+ const a=app();try{
+  a.w.Lilt.init(library([note('a','Old local standup',{updatedAt:10})],'a'));
+  const incoming='## Standup\n\n| Service | Coverage |\n| --- | --- |\n| PilotFish | 92% |\n| AzDeployer | 96% |';
+  a.w.Lilt.merge(library([note('a',incoming,{updatedAt:20})],'a'));
+  assert.match(a.w.Lilt.editor.getText(),/PilotFish/);
+  assert.match(a.w.Lilt.editor.getHTML(),/<table/);
+  const saved=JSON.parse(a.w.Lilt.flush()).notes.find(n=>n.id==='a');
+  assert.match(saved.markdown,/AzDeployer/);
+  assert.doesNotMatch(saved.markdown,/Old local standup/);
+  assert.equal(saved.updatedAt,20);
+ }finally{a.close();}
+});
+test('backup import preserves unsaved local edits and renders a newer replacement of the open note',()=>{
+ const a=app();try{
+  a.w.Lilt.init(library([note('a','Before restore',{updatedAt:10})],'a'));
+  a.w.Lilt.importBackup(library([note('a','Recovered table',{updatedAt:20})],'a'));
+  assert.equal(a.w.Lilt.editor.getText(),'Recovered table');
+  a.w.Lilt.editor.commands.insertContent(' local edit');
+  a.w.Lilt.importBackup(library([note('a','Older copy',{updatedAt:15}),note('b','Other note')],'a'));
+  assert.match(a.w.Lilt.editor.getText(),/local edit/);
+  assert.equal(a.w.Lilt.state().notes.length,2);
+ }finally{a.close();}
+});
+test('sync leaves edits and undo history untouched when only a different note changes',()=>{
+ const a=app();try{
+  a.w.Lilt.init(library([note('a','Local',{updatedAt:10}),note('b','Before',{updatedAt:10})],'a'));
+  a.w.Lilt.editor.commands.insertContent(' pending');
+  a.w.Lilt.merge(library([note('b','Remote update',{updatedAt:20})],'b'));
+  assert.match(a.w.Lilt.editor.getText(),/pending/);
+  a.w.Lilt.editor.commands.undo();
+  assert.equal(a.w.Lilt.editor.getText(),'Local');
+ }finally{a.close();}
+});
 test('task nodeview has layout class and checkbox wiring',()=>{const a=app();try{a.w.Lilt.init(library([note('a','- [ ] Task')],'a'));const item=a.w.document.querySelector('li[data-type="taskItem"]');assert.ok(item);const checkbox=item.querySelector('input');checkbox.click();assert.equal(a.w.Lilt.editor.getJSON().content[0].content[0].attrs.checked,true);}finally{a.close();}});
 test('HTML export while editing source contains the latest source changes',()=>{const a=app();try{a.w.Lilt.init(library([note('a','Original')],'a'));a.w.Lilt.action('source');const source=a.w.document.querySelector('#source');source.value='# Latest';source.dispatchEvent(new a.w.Event('input'));a.w.Lilt.action('actions');const input=a.w.document.querySelector('#overlay-search');input.value='Export HTML';input.dispatchEvent(new a.w.Event('input'));a.w.document.querySelector('[data-index="0"]').click();const output=a.messages.findLast(m=>m.type==='export');assert.match(output.content,/<h1>Latest/);assert.doesNotMatch(output.content,/Original/);}finally{a.close();}});
 test('imported Markdown immediately updates the visible title',()=>{const a=app();try{a.w.Lilt.init(library([note('a','Original')],'a'));a.w.Lilt.importNotes([{markdown:'# Imported title\n\nBody'}]);assert.equal(a.w.document.querySelector('#note-title').textContent,'Imported title');assert.equal(a.w.Lilt.state().notes.at(-1).title,'Imported title');}finally{a.close();}});
