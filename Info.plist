@@ -3,7 +3,7 @@
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>Lilt Notes</string><key>CFBundleDisplayName</key><string>Lilt Notes</string>
 <key>CFBundleIdentifier</key><string>com.shivam.liltnotes</string><key>CFBundleExecutable</key><string>LiltNotes</string>
-<key>CFBundleVersion</key><string>2</string><key>CFBundleShortVersionString</key><string>1.1.0</string>
+<key>CFBundleVersion</key><string>4</string><key>CFBundleShortVersionString</key><string>1.1.2</string>
 <key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSUserActivityTypes</key><array><string>com.apple.corespotlightitem</string></array>
 <key>NSHighResolutionCapable</key><true/><key>LSUIElement</key><true/><key>CFBundleIconFile</key><string>AppIcon</string>
