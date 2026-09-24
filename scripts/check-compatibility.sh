@@ -4,6 +4,17 @@ cd "${0:A:h:h}"
 zsh scripts/build.sh
 lilt_audit_root=$(mktemp -d "$PWD/build/compatibility.XXXXXX")
 lilt_audit_app="$lilt_audit_root/Lilt Compatibility Check.app"
+# Keep verification reports; remove temporary apps and synthetic libraries.
+cleanup_audit_files() {
+  if [[ -d "$lilt_audit_app" ]]; then
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$lilt_audit_app" >/dev/null 2>&1 || true
+    rm -rf -- "$lilt_audit_app"
+  fi
+  for lilt_test_mode in native fallback sizing presentation integration; do
+    rm -rf -- "$lilt_audit_root/$lilt_test_mode-data"
+  done
+}
+trap cleanup_audit_files EXIT
 ditto 'dist/Lilt Notes.app' "$lilt_audit_app"
 /usr/libexec/PlistBuddy -c 'Set CFBundleIdentifier com.shivam.liltnotes.compatibility-check' "$lilt_audit_app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set CFBundleName Lilt Compatibility Check' "$lilt_audit_app/Contents/Info.plist"
@@ -11,10 +22,12 @@ ditto 'dist/Lilt Notes.app' "$lilt_audit_app"
 /usr/libexec/PlistBuddy -c 'Delete CFBundleURLTypes' "$lilt_audit_app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Delete CFBundleDocumentTypes' "$lilt_audit_app/Contents/Info.plist"
 codesign --force --deep --sign - "$lilt_audit_app"
-for lilt_audit_mode in native fallback sizing; do
+for lilt_audit_mode in native fallback sizing presentation integration; do
   lilt_audit_options=(--compatibility-audit "$lilt_audit_root/$lilt_audit_mode.json")
   if [[ "$lilt_audit_mode" == fallback ]]; then lilt_audit_options+=(--no-glass); fi
   if [[ "$lilt_audit_mode" == sizing ]]; then lilt_audit_options=(--sizing-audit "$lilt_audit_root/$lilt_audit_mode.json"); fi
+  if [[ "$lilt_audit_mode" == presentation ]]; then lilt_audit_options=(--presentation-audit "$lilt_audit_root/$lilt_audit_mode.json"); fi
+  if [[ "$lilt_audit_mode" == integration ]]; then lilt_audit_options=(--integration-audit "$lilt_audit_root/$lilt_audit_mode.json"); fi
   python3 - "$lilt_audit_app/Contents/MacOS/LiltNotes" --data-dir "$lilt_audit_root/$lilt_audit_mode-data" --quit-after-audit "${lilt_audit_options[@]}" <<'PY'
 import subprocess, sys
 try:
