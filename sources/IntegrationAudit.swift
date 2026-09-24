@@ -73,6 +73,7 @@ extension AppDelegate {
                 report["delivery"]="Application URL delegate; isolated library. OS cold launch is covered by the separate Finder quicklink check."
             }catch{report["passed"]=false;report["error"]=error.localizedDescription}
             if let data=try? JSONSerialization.data(withJSONObject:report,options:[.prettyPrinted,.sortedKeys]){try? data.write(to:output)}
+            if self.args.contains("--quit-after-audit"){NSApp.terminate(nil)}
         }
     }
 }

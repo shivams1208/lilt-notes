@@ -37,6 +37,9 @@ extension AppDelegate {
                     _ = try await evaluate("Lilt.action('closeOverlay');")
                 }
                 report["appearances"]=appearances
+                let remoteTable=try await evaluate("const current=Lilt.state().notes.find(n=>n.id===Lilt.state().currentId);const markdown='# Synced standup\\n\\n| Service | Coverage |\\n| --- | --- |\\n| PilotFish | 92% |\\n| AzDeployer | 96% |';Lilt.merge({version:1,notes:[{...current,markdown,text:markdown,doc:null,updatedAt:current.updatedAt+1000}],settings:{},snippets:[]});return Lilt.editor.getText().includes('PilotFish')&&!!document.querySelector('.tiptap table');") as? Bool ?? false
+                try require(remoteTable,"Sync replaced the incoming table with stale editor contents")
+                report["newerSyncedTableReplacesOpenNote"]=true
                 _ = try await evaluate("Lilt.editor.commands.insertContent(' Recovery marker — café 🚀');Lilt.flush();")
                 try await settle()
                 let before=try await evaluate("return {id:Lilt.state().currentId,markdown:Lilt.editor.getMarkdown()};") as! [String:Any]

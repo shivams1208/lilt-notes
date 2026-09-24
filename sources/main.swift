@@ -51,6 +51,10 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     var hotkeyBindings:[ShortcutBinding]=[],hotkeyFailures:[String:Int32]=[:],hotkeyConfiguration=""
     var writingTask:Task<Void,Never>?,writingRequestID:String?
     var shortcutRecording:String?
+    var shortcutPressGate=ShortcutPressGate()
+    var presentationGeneration=0,isPresentingPanel=false
+    var presentationDeadline:TimeInterval=0,presentationOwner:pid_t?
+    var presentationEvents:[[String:Any]]=[]
     var hotkeysEnabled:Bool{!isTest || args.contains("--test-hotkeys")}
     var directory:URL {if let i=args.firstIndex(of:"--data-dir"),i+1<args.count{return URL(fileURLWithPath:args[i+1],isDirectory:true)};return FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Lilt Notes",isDirectory:true)}
     func applicationDidFinishLaunching(_ notification:Notification){
@@ -58,7 +62,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         do {try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true);instanceLock=Darwin.open(directory.appendingPathComponent("session.lock").path,O_CREAT|O_RDWR,0o600);guard instanceLock>=0,flock(instanceLock,LOCK_EX|LOCK_NB)==0 else{NSRunningApplication.runningApplications(withBundleIdentifier:"com.shivam.liltnotes").first(where:{$0.processIdentifier != ProcessInfo.processInfo.processIdentifier})?.activate(options:[]);NSApp.terminate(nil);return}}catch{NSApp.terminate(nil);return}
         do {vault=try Vault(directory:directory);latestData=try vault.read()}
         catch {let alert=NSAlert();alert.messageText="Lilt Notes could not open your library";alert.informativeText=error.localizedDescription;alert.runModal();NSApp.terminate(nil);return}
-        configureDefaultNotesFolder();createMenu();createWindow();createStatusItem();installLocalHotkeys()
+        configureDefaultNotesFolder();createMenu();createWindow();createStatusItem();installLocalHotkeys();installPresentationObservers()
         if !isTest || args.contains("--test-spotlight") {
             spotlightIndex=SpotlightNotesIndex(directory:directory)
             if let data=latestData{spotlightIndex?.update(data)}
@@ -77,11 +81,11 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         preferences["syncDefaultInitialized"]=true;library["settings"]=preferences
         if let updated=try? JSONSerialization.data(withJSONObject:library){latestData=updated;try? vault.save(updated)}
     }
-    func writeWindowAudit(){guard isTest else{return};let report:[String:Any]=["autoSize":settings["autoSize"] as? Bool ?? true,"manualResizeActive":manualResizeActive,"resizeEventCount":resizeEvents.count,"x":panel.frame.minX,"y":panel.frame.minY,"nativeMaterialsEnabled":nativeMaterialsEnabled,"visible":panel.isVisible,"onActiveSpace":panel.isOnActiveSpace,"notOccluded":panel.occlusionState.contains(.visible),"keyWindow":panel.isKeyWindow,"floating":panel.level == .floating,"registeredHotkeys":hotkeys.count,"receivedHotkeys":receivedHotkeys,"shortcutTargets":hotkeyBindings.filter{hotkeyFailures[$0.target]==nil}.map{$0.target},"shortcutFailures":hotkeyFailures,"handlerInstalled":handler != nil,"frontmostApp":NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "", "width":panel.frame.width,"height":panel.frame.height];if let data=try? JSONSerialization.data(withJSONObject:report,options:[.sortedKeys,.prettyPrinted]){try? data.write(to:directory.appendingPathComponent("window-state.json"))}}
+    func writeWindowAudit(){guard isTest else{return};let report:[String:Any]=["autoSize":settings["autoSize"] as? Bool ?? true,"manualResizeActive":manualResizeActive,"resizeEventCount":resizeEvents.count,"x":panel.frame.minX,"y":panel.frame.minY,"nativeMaterialsEnabled":nativeMaterialsEnabled,"visible":panel.isVisible,"onActiveSpace":panel.isOnActiveSpace,"notOccluded":panel.occlusionState.contains(.visible),"keyWindow":panel.isKeyWindow,"floating":panel.level == .floating,"joinsAllApplications":panel.collectionBehavior.contains(.canJoinAllApplications),"windowNumber":panel.windowNumber,"registeredHotkeys":hotkeys.count,"receivedHotkeys":receivedHotkeys,"shortcutTargets":hotkeyBindings.filter{hotkeyFailures[$0.target]==nil}.map{$0.target},"shortcutFailures":hotkeyFailures,"handlerInstalled":handler != nil,"frontmostApp":NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "", "width":panel.frame.width,"height":panel.frame.height];if let data=try? JSONSerialization.data(withJSONObject:report,options:[.sortedKeys,.prettyPrinted]){try? data.write(to:directory.appendingPathComponent("window-state.json"))}}
     func createWindow(){
         panel=NotesPanel(contentRect:NSRect(x:0,y:0,width:480,height:480),styleMask:[.titled,.resizable,.fullSizeContentView,.nonactivatingPanel],backing:.buffered,defer:false)
         panel.title="Lilt Notes";panel.titleVisibility = .hidden;panel.titlebarAppearsTransparent=true;panel.isFloatingPanel=true;panel.hidesOnDeactivate=false;panel.becomesKeyOnlyIfNeeded=false
-        panel.level = .floating;panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.stationary];panel.isReleasedWhenClosed=false;panel.isOpaque=false;panel.backgroundColor = .clear;panel.hasShadow=true;panel.minSize=NSSize(width:360,height:200);panel.maxSize=NSSize(width:1400,height:1600);panel.delegate=self
+        panel.level = .floating;panel.collectionBehavior=[.canJoinAllApplications,.canJoinAllSpaces,.fullScreenAuxiliary,.stationary];panel.isReleasedWhenClosed=false;panel.isOpaque=false;panel.backgroundColor = .clear;panel.hasShadow=true;panel.minSize=NSSize(width:360,height:200);panel.maxSize=NSSize(width:1400,height:1600);panel.delegate=self
         panel.standardWindowButton(.closeButton)?.isHidden=true;panel.standardWindowButton(.miniaturizeButton)?.isHidden=true;panel.standardWindowButton(.zoomButton)?.isHidden=true
         let bounds=panel.contentView!.bounds
         let content=NoteSurfaceView(frame:bounds);content.autoresizingMask=[.width,.height]
@@ -120,11 +124,8 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         let edit=NSMenu(title:"Edit");let editItem=NSMenuItem();editItem.submenu=edit;main.addItem(editItem);command(edit,"Undo","z","undo");command(edit,"Redo","z","redo",modifiers:[.command,.shift]);edit.addItem(.separator());for(title,key,selector) in [("Cut","x",#selector(NSText.cut(_:))),("Copy","c",#selector(NSText.copy(_:))),("Paste","v",#selector(NSText.paste(_:))),("Select All","a",#selector(NSText.selectAll(_:)))]{edit.addItem(withTitle:title,action:selector,keyEquivalent:key)};command(edit,"Find in Note…","f","find")
         let view=NSMenu(title:"View");let viewItem=NSMenuItem();viewItem.submenu=view;main.addItem(viewItem);command(view,"Actions","k","actions");command(view,"Back","[","back");command(view,"Forward","]","forward");command(view,"Zoom In","=","zoomIn");command(view,"Zoom Out","-","zoomOut");command(view,"Actual Size","0","zoomReset");NSApp.mainMenu=main
     }
-    func show(){panel.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true);if loaded{web.evaluateJavaScript("document.querySelector('.tiptap')?.focus()",completionHandler:nil)}}
-    func hide(){if loaded{js("flush")};panel.orderOut(nil)}
-    func toggle(){if panel.isVisible && panel.isKeyWindow {hide()}else{show()}}
     func windowDidBecomeKey(_ notification:Notification){if loaded{web.evaluateJavaScript("document.documentElement.toggleAttribute('data-window-inactive',false)",completionHandler:nil)}}
-    func windowDidResignKey(_ notification:Notification){if loaded{web.evaluateJavaScript("document.documentElement.toggleAttribute('data-window-inactive',true)",completionHandler:nil)}}
+    func windowDidResignKey(_ notification:Notification){if !isPresentingPanel{presentationGeneration += 1;presentationDeadline=0;panel.level=(settings["alwaysOnTop"] as? Bool != false) ? .floating : .normal};if loaded{web.evaluateJavaScript("document.documentElement.toggleAttribute('data-window-inactive',true)",completionHandler:nil)}}
     func windowWillStartLiveResize(_ notification:Notification){
         manualResizeActive=true;settings["autoSize"]=false
         if loaded{js("manualResize")}
@@ -150,7 +151,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     func userContentController(_ userContentController:WKUserContentController,didReceive message:WKScriptMessage){
         guard message.frameInfo.isMainFrame,let body=message.body as? [String:Any],let type=body["type"] as? String else{return}
         switch type {
-        case "ready":loaded=true;if let data=latestData,let object=try? JSONSerialization.jsonObject(with:data){js("init",[object])};pendingURLs.forEach(handleURL);pendingURLs=[];if vault.recoveredBackup{js("toast",["Recovered your previous saved library"])};runUIAuditIfRequested();runIntegrationAuditIfRequested();runWindowSizingAuditIfRequested();runSpotlightAuditIfRequested();runCompatibilityAuditIfRequested()
+        case "ready":loaded=true;if let data=latestData,let object=try? JSONSerialization.jsonObject(with:data){js("init",[object])};pendingURLs.forEach(handleURL);pendingURLs=[];if vault.recoveredBackup{js("toast",["Recovered your previous saved library"])};runUIAuditIfRequested();runIntegrationAuditIfRequested();runWindowSizingAuditIfRequested();runSpotlightAuditIfRequested();runCompatibilityAuditIfRequested();runWindowPresentationAuditIfRequested()
         case "save":guard let library=body["library"],let data=try? JSONSerialization.data(withJSONObject:library),let revision=body["revision"] as? Int else{return};latestData=data;latestRevision=revision;persist(data,revision:revision)
         case "settings":if let s=body["settings"] as? [String:Any]{applySettings(s)}
         case "resize":if settings["autoSize"] as? Bool != false,!manualResizeActive,!panel.inLiveResize,!overlayOpen,let h=body["height"] as? Double {resize(height:h)}
@@ -197,7 +198,7 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
         }
     }
     func persist(_ data:Data,revision:Int){saveQueue.async{do{try self.vault.save(data);DispatchQueue.main.async{self.storeError=nil;self.spotlightIndex?.update(data);self.js("saved",[revision]);self.syncNow()}}catch{DispatchQueue.main.async{self.storeError=error;self.js("error",[error.localizedDescription])}}}}
-    func applySettings(_ s:[String:Any]){settings=s;panel.level=(s["alwaysOnTop"] as? Bool != false) ? .floating : .normal;let theme=s["theme"] as? String ?? "system";panel.appearance=theme=="dark" ? NSAppearance(named:.darkAqua):theme=="light" ? NSAppearance(named:.aqua):nil;let mode=s["hotkey"] as? String ?? "option";if shortcutRecording==nil && shortcutConfiguration(mode) != hotkeyConfiguration {registerHotkeys(mode)};let folder=(s["syncPath"] as? String).map{URL(fileURLWithPath:$0,isDirectory:true)};if folder?.path != syncFolder?.path || !syncAuthorized{restoreFolderAccess(folder)};if !isTest,folder != nil,!syncAuthorized,!requestedFolderAccess{requestedFolderAccess=true;DispatchQueue.main.async{self.chooseSync(defaultFolder:folder)}}}
+    func applySettings(_ s:[String:Any]){settings=s;panel.level=(s["alwaysOnTop"] as? Bool != false || panel.isKeyWindow) ? .floating : .normal;let theme=s["theme"] as? String ?? "system";panel.appearance=theme=="dark" ? NSAppearance(named:.darkAqua):theme=="light" ? NSAppearance(named:.aqua):nil;let mode=s["hotkey"] as? String ?? "option";if shortcutRecording==nil && shortcutConfiguration(mode) != hotkeyConfiguration {registerHotkeys(mode)};let folder=(s["syncPath"] as? String).map{URL(fileURLWithPath:$0,isDirectory:true)};if folder?.path != syncFolder?.path || !syncAuthorized{restoreFolderAccess(folder)};if !isTest,folder != nil,!syncAuthorized,!requestedFolderAccess{requestedFolderAccess=true;DispatchQueue.main.async{self.chooseSync(defaultFolder:folder)}}}
     func resize(height:Double){let screen=panel.screen ?? NSScreen.main;let maxHeight=min(780,screen?.visibleFrame.height ?? 780);let h=max(240,min(maxHeight,height));let frame=panel.frame;if abs(frame.height-h)>2 {var next=NSRect(x:frame.minX,y:frame.maxY-h,width:frame.width,height:h);if let area=screen?.visibleFrame {next.origin.y=max(area.minY,min(next.origin.y,area.maxY-h))};panel.setFrame(next,display:true,animate:false)}}
     func shortcutConfiguration(_ mode:String)->String {
         let notes=settings["noteHotkeys"] as? [String:[String:Any]] ?? [:]
@@ -214,8 +215,9 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
     }
     func applicationDidResignActive(_ notification:Notification){if let request=shortcutRecording{cancelShortcutRecording();js("shortcutRecorded",[request,NSNull()])}}
     func cancelShortcutRecording(){guard shortcutRecording != nil else{return};shortcutRecording=nil;registerHotkeys(settings["hotkey"] as? String ?? "option")}
-    func installLocalHotkeys(){localKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
+    func installLocalHotkeys(){localKeyMonitor=NSEvent.addLocalMonitorForEvents(matching:[.keyDown,.keyUp]){[weak self] event in
         guard let self=self else{return event}
+        if event.type == .keyUp{self.shortcutPressGate.release(UInt32(event.keyCode));return event}
         let flags=event.modifierFlags.intersection([.command,.control,.option,.shift]),mods=self.carbonModifiers(flags)
         if let request=self.shortcutRecording {
             if event.keyCode==UInt16(kVK_Escape){self.cancelShortcutRecording();self.js("shortcutRecorded",[request,NSNull()]);return nil}
@@ -229,18 +231,22 @@ final class AppDelegate:NSObject,NSApplicationDelegate,WKScriptMessageHandler,WK
             self.cancelShortcutRecording();self.js("shortcutRecorded",[request,value]);return nil
         }
         guard self.hotkeysEnabled,self.hotkeyMode != "none",let binding=self.hotkeyBindings.first(where:{$0.keyCode==UInt32(event.keyCode) && $0.modifiers==mods}),self.hotkeyFailures[binding.target]==nil else{return event}
-        if !event.isARepeat{self.performShortcut(binding.target)};return nil
+        if self.shortcutPressGate.press(binding.keyCode,isRepeat:event.isARepeat){self.performShortcut(binding.target)};return nil
     }}
     func registerHotkeys(_ mode:String){
-        hotkeys.forEach{UnregisterEventHotKey($0)};hotkeys=[];hotkeyFailures=[:];hotkeyMode=mode;hotkeyConfiguration=shortcutConfiguration(mode)
+        hotkeys.forEach{UnregisterEventHotKey($0)};hotkeys=[];shortcutPressGate.reset();hotkeyFailures=[:];hotkeyMode=mode;hotkeyConfiguration=shortcutConfiguration(mode)
         hotkeyBindings=ShortcutPlan.bindings(mode:mode,notes:ShortcutPlan.notes(settings))
-        if handler==nil {var spec=EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyPressed));InstallEventHandler(GetEventDispatcherTarget(),{_,event,userData in
+        if handler==nil {var specs=[EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyPressed)),EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyReleased))];InstallEventHandler(GetEventDispatcherTarget(),{_,event,userData in
             guard let event=event,let userData=userData else{return OSStatus(eventNotHandledErr)}
             var id=EventHotKeyID();GetEventParameter(event,EventParamName(kEventParamDirectObject),EventParamType(typeEventHotKeyID),nil,MemoryLayout<EventHotKeyID>.size,nil,&id)
             let app=Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            guard let target=app.hotkeyBindings.first(where:{$0.id==id.id})?.target else{return noErr}
-            DispatchQueue.main.async{if app.isTest{app.receivedHotkeys.append(id.id)};app.performShortcut(target)};return noErr
-        },1,&spec,Unmanaged.passUnretained(self).toOpaque(),&handler)}
+            guard id.signature==0x4c494c54,let binding=app.hotkeyBindings.first(where:{$0.id==id.id}) else{return noErr}
+            let released=GetEventKind(event)==UInt32(kEventHotKeyReleased)
+            DispatchQueue.main.async{
+                if released{app.shortcutPressGate.release(binding.keyCode)}
+                else if app.shortcutPressGate.press(binding.keyCode){if app.isTest{app.receivedHotkeys.append(id.id)};app.performShortcut(binding.target)}
+            };return noErr
+        },2,&specs,Unmanaged.passUnretained(self).toOpaque(),&handler)}
         guard hotkeysEnabled else{return}
         for binding in hotkeyBindings {
             var ref:EventHotKeyRef?
